@@ -1,39 +1,26 @@
 from fastapi import APIRouter, HTTPException
-from schemas import ChatRequest, ChatResponse
+from schemas.chat_schemas import ChatResponse, ChatRequest
 from services.gemini_service import get_gemini_response
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from services.gemini_service import get_gemini_response
-
+from services.qdrant_service import upsert_vector
+import numpy as np 
+    
 router = APIRouter()
+
 
 @router.post("/", response_model=ChatResponse)
 async def chat_with_ai(data: ChatRequest):
     try:
         reply = get_gemini_response(data.message)
+
+        dummy_vector = np.random.rand(1536).tolist() 
+        payload = {
+            "user_id": data.user_id,
+            "message": data.message,
+            "reply": reply,
+        }
+        upsert_vector(collection_name="chat_collection", vector=dummy_vector, payload=payload)
+
         return ChatResponse(role="assistant", content=reply)
     except Exception as e:
-        print("❌ Gemini ERROR:", str(e))  # <--- log the error
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
-class EODRequest(BaseModel):
-    user_id: str
-    activities: str
-
-class EODResponse(BaseModel):
-    content: str
-
-@router.post("/", response_model=EODResponse)
-async def generate_eod(data: EODRequest):
-    try:
-        prompt = (
-            f"Generate a professional End Of Day (EOD) report based on these activities:\n\n"
-            f"{data.activities.strip()}\n\n"
-            "Include sections for Tasks Completed, Achievements, Next Steps, and Challenges."
-        )
-        content = get_gemini_response(prompt)
-        return EODResponse(content=content)
-    except Exception as e:
+        print("❌ Gemini ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
